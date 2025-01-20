@@ -1,0 +1,89 @@
+##################################################
+# Devin Sciarrino
+# 19 January 2025
+#Housing Price Competiton
+###################################################
+
+#####################
+# Preliminaries
+#####################
+
+
+
+# Clear environment, plot pane, and console
+rm(list = ls())
+graphics.off()
+cat("\014")
+
+# Turn off scientific notation
+options(scipen = 999)
+
+# pacman installation
+if (!require(pacman)) install.packages("pacman")
+
+# Load packages
+pacman::p_load(ISLR2, caret, randomForest, data.table, ggplot2, glmnet, boot)
+
+#set seed
+set.seed(123)
+
+#setwd
+setwd("~/Downloads")
+
+#load data
+dt <- read.csv("home-data-for-ml-course/train.csv")
+
+######################
+#data cleaning
+######################
+
+#mean imputation
+dt <- lapply(dt, function(col) {
+  if (is.numeric(col)) {
+    col[is.na(col)] <- mean(col, na.rm = TRUE)
+  }
+  col
+})
+
+#no imputation
+# Replace NA with "No" in all character columns
+dt[sapply(dt, is.character)] <- lapply(dt[sapply(dt, is.character)], function(x) {
+  x[is.na(x)] <- "No"
+  return(x)
+})
+
+
+#check for na
+any(is.na(dt))
+#ensure data frame
+dt <- as.data.frame(dt)
+colSums(is.na(dt))
+
+#random forests model
+
+# Define the grid of mtry values 
+mtry_grid <- expand.grid(mtry = c(2, 5, 9, ncol(dt) - 1))
+
+# Initialize a list to store models
+models_rf <- list()
+
+# Create three random forest models with a different number of trees in each forest
+for (t in c(100, 200, 300))
+{
+  # Print current number of trees in the forest
+  print(paste0(t, " trees in the forest."))
+  
+  # Define the model type
+  reg_rf <- train(
+    SalePrice ~ .,        
+    data = dt,        
+    method = "rf",  
+    tuneGrid = mtry_grid,  
+    trControl = trainControl(method = "cv", number = 5),
+    ntree = t
+  )
+  # Store the model in the list
+  models_rf[[paste0("ntree_", t)]] <- reg_rf
+  
+  print(models_rf)
+}
