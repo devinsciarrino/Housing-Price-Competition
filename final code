@@ -1,0 +1,181 @@
+##################################################
+# Devin Sciarrino
+# 19 January 2025
+#Housing Price Competiton
+###################################################
+
+#####################
+# Preliminaries
+#####################
+
+
+
+# Clear environment, plot pane, and console
+rm(list = ls())
+graphics.off()
+cat("\014")
+
+# Turn off scientific notation
+options(scipen = 999)
+
+# pacman installation
+if (!require(pacman)) install.packages("pacman")
+
+# Load packages
+pacman::p_load(ISLR2, caret, randomForest, data.table, ggplot2, glmnet, boot)
+
+#set seed
+set.seed(123)
+
+#setwd
+setwd("~/Downloads")
+
+#load data
+dt <- read.csv("home-data-for-ml-course/train.csv")
+
+######################
+#data cleaning
+######################
+
+#get rid of FA rating for pool quality
+dt$PoolQC <- ifelse(dt$PoolQC == "Fa", "Gd",dt$PoolQC)
+
+
+#mean imputation
+dt <- lapply(dt, function(col) {
+  if (is.numeric(col)) {
+    col[is.na(col)] <- mean(col, na.rm = TRUE)
+  }
+  col
+})
+
+#no imputation
+# Replace NA with "No" in all character columns
+dt[sapply(dt, is.character)] <- lapply(dt[sapply(dt, is.character)], function(x) {
+  x[is.na(x)] <- "No"
+  return(x)
+})
+
+
+#check for na
+any(is.na(dt))
+#ensure data frame
+dt <- as.data.frame(dt)
+colSums(is.na(dt))
+
+# Ensure "No" is a potential value in all character columns
+dt[sapply(dt, is.character)] <- lapply(dt[sapply(dt, is.character)], function(x) {
+  levels <- unique(c(x, "No"))  # Add "No" to the unique values
+  factor(x, levels = levels)   # Convert to a factor with updated levels
+})
+
+########################
+#random forests model
+########################
+
+# Define the grid of mtry values 
+mtry_grid <- expand.grid(mtry = c(2, 5, 9, ncol(dt) - 1))
+
+# Initialize a list to store models
+models_rf <- list()
+
+# Create three random forest models with a different number of trees in each forest
+for (t in c(100, 200, 300))
+{
+  # Print current number of trees in the forest
+  print(paste0(t, " trees in the forest."))
+  
+  # Define the model type
+  reg_rf <- train(
+    SalePrice ~ .,        
+    data = dt,        
+    method = "rf",  
+    tuneGrid = mtry_grid,  
+    trControl = trainControl(method = "cv", number = 5),
+    ntree = t
+  )
+  # Store the model in the list
+  models_rf[[paste0("ntree_", t)]] <- reg_rf
+  
+  print(models_rf)
+  
+}
+
+# 300 tree's by itself
+reg_rf_final <- train(
+  SalePrice ~ .,        
+  data = dt,        
+  method = "rf",  
+  tuneGrid = mtry_grid,  
+  trControl = trainControl(method = "cv", number = 5),
+  ntree = 300
+)
+print(reg_rf_final)
+#####################
+#Test Set
+#####################
+
+#Load test data
+dt2 <- read.csv("home-data-for-ml-course/test.csv")
+
+#clean new data
+
+#change 
+dt2$MSZoning <- ifelse(is.na(dt2$MSZoning), "RL",dt2$MSZoning)
+
+
+#mean imputation for integer NA data
+dt2 <- lapply(dt2, function(col) {
+  if (is.numeric(col)) {
+    col[is.na(col)] <- mean(col, na.rm = TRUE)
+  }
+  col
+})
+#ensure data frame
+dt2 <- as.data.frame(dt2)
+
+
+# Replace NA with "No" in all character columns
+dt2[sapply(dt2, is.character)] <- lapply(dt2[sapply(dt2, is.character)], function(x) {
+  x[is.na(x)] <- "No"
+  return(x)
+})
+
+
+#check for na
+any(is.na(dt2))
+#ensure data frame
+dt2 <- as.data.frame(dt2)
+colSums(is.na(dt2))
+
+# Ensure "No" is a potential value in all character columns
+dt2[sapply(dt2, is.character)] <- lapply(dt2[sapply(dt2, is.character)], function(x) {
+  levels <- unique(c(x, "No"))  # Add "No" to the unique values
+  factor(x, levels = levels)   # Convert to a factor with updated levels
+})
+
+
+
+######################
+#predict
+######################
+predictions_rf_test <- predict(reg_rf_final, newdata = dt2)
+predictions_rf_test
+
+###################
+# Save Predictions
+###################
+
+#submission file creation
+subdata <- data.frame(c(dt2$Id))
+subdata$Id <- subdata$c.dt2.Id.
+subdata$SalePrice <- predictions_rf_test
+subdata$c.dt2.Id. <- NULL
+
+
+# Save predictions
+require(pacman)
+setwd("~/Documents")
+pacman::p_load(data.table)
+save(subdata, file = "housing_final.RData")
+fwrite(subdata, "housing_final.csv")
